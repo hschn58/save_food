@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Save Food</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Save Food">
+  <meta name="theme-color" content="#2e7d32">
+</head>
+<body>
+  <header>
+    <h1 id="title">Grocery List</h1>
+  </header>
+
+  <main>
+    <section id="list-view">
+      <form id="add-form" autocomplete="off">
+        <input id="add-name" type="text" placeholder="Add an item (e.g. milk)" required>
+        <input id="add-qty" type="text" placeholder="Qty">
+        <button type="submit">Add</button>
+      </form>
+      <ul id="grocery-items" class="items"></ul>
+      <p id="list-empty" class="empty hidden">Your list is empty. Add something above.</p>
+    </section>
+
+    <section id="pantry-view" class="hidden">
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="Search your pantry">
+        <button id="expiring-toggle" type="button">Expiring soon</button>
+      </div>
+      <ul id="pantry-items" class="items"></ul>
+      <p id="pantry-empty" class="empty hidden">Nothing here yet. Check items off your list and they land here.</p>
+    </section>
+  </main>
+
+  <nav>
+    <button id="tab-list" class="tab active" type="button">🛒 List</button>
+    <button id="tab-pantry" class="tab" type="button">🥫 Pantry</button>
+  </nav>
+
+  <script src="/app.js"></script>
+</body>
+</html>
