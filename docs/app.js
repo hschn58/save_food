@@ -1,28 +1,47 @@
+import {
+  addToList,
+  checkOff,
+  daysLeft,
+  emptyState,
+  isoDate,
+  listPantry,
+  removeFromList,
+  updatePantryItem,
+  usePantryItem,
+} from "./logic.js";
+
 const $ = (id) => document.getElementById(id);
 
-const state = { tab: "list", search: "", expiringOnly: false };
+const STORAGE_KEY = "save-food-state";
 
-// --- api helpers ---
-
-async function api(path, options = {}) {
-  const res = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  return res.status === 204 ? null : res.json();
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (err) {
+    console.error("corrupt state, starting fresh", err);
+  }
+  return emptyState();
 }
+
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+const state = loadState();
+const ui = { tab: "list", search: "", expiringOnly: false };
+const today = () => isoDate(new Date());
 
 // --- tabs ---
 
 function showTab(tab) {
-  state.tab = tab;
+  ui.tab = tab;
   $("list-view").classList.toggle("hidden", tab !== "list");
   $("pantry-view").classList.toggle("hidden", tab !== "pantry");
   $("tab-list").classList.toggle("active", tab === "list");
   $("tab-pantry").classList.toggle("active", tab === "pantry");
   $("title").textContent = tab === "list" ? "Grocery List" : "Pantry";
-  refresh();
+  render();
 }
 
 $("tab-list").addEventListener("click", () => showTab("list"));
@@ -30,33 +49,32 @@ $("tab-pantry").addEventListener("click", () => showTab("pantry"));
 
 // --- grocery list ---
 
-$("add-form").addEventListener("submit", async (e) => {
+$("add-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const name = $("add-name").value.trim();
   if (!name) return;
-  const quantity = $("add-qty").value.trim() || null;
-  await api("/api/list", { method: "POST", body: JSON.stringify({ name, quantity }) });
+  addToList(state, { name, quantity: $("add-qty").value.trim() || null });
+  save();
   $("add-name").value = "";
   $("add-qty").value = "";
   $("add-name").focus();
-  refresh();
+  render();
 });
 
-async function renderList() {
-  const items = await api("/api/list");
+function renderList() {
   const ul = $("grocery-items");
   ul.innerHTML = "";
-  $("list-empty").classList.toggle("hidden", items.length > 0);
-  for (const item of items) {
+  $("list-empty").classList.toggle("hidden", state.list.length > 0);
+  for (const item of state.list) {
     const li = document.createElement("li");
 
     const check = document.createElement("button");
     check.className = "check";
     check.title = "Check off — moves to pantry";
-    check.addEventListener("click", async () => {
-      check.textContent = "✓";
-      await api(`/api/list/${item.id}/check`, { method: "POST" });
-      refresh();
+    check.addEventListener("click", () => {
+      checkOff(state, item.id, today());
+      save();
+      render();
     });
 
     const info = document.createElement("div");
@@ -74,9 +92,10 @@ async function renderList() {
     const del = document.createElement("button");
     del.className = "danger";
     del.textContent = "✕";
-    del.addEventListener("click", async () => {
-      await api(`/api/list/${item.id}`, { method: "DELETE" });
-      refresh();
+    del.addEventListener("click", () => {
+      removeFromList(state, item.id);
+      save();
+      render();
     });
     actions.append(del);
 
@@ -91,43 +110,44 @@ let searchTimer;
 $("search").addEventListener("input", (e) => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
-    state.search = e.target.value.trim();
-    refresh();
+    ui.search = e.target.value.trim();
+    render();
   }, 200);
 });
 
 $("expiring-toggle").addEventListener("click", () => {
-  state.expiringOnly = !state.expiringOnly;
-  $("expiring-toggle").classList.toggle("active", state.expiringOnly);
-  refresh();
+  ui.expiringOnly = !ui.expiringOnly;
+  $("expiring-toggle").classList.toggle("active", ui.expiringOnly);
+  render();
 });
 
 function daysChip(item) {
   const chip = document.createElement("span");
   chip.className = "chip";
-  if (item.days_left === null) {
+  const days = daysLeft(item, today());
+  if (days === null) {
     chip.textContent = "no expiry";
-  } else if (item.days_left < 0) {
+  } else if (days < 0) {
     chip.classList.add("bad");
     chip.textContent = "expired";
-  } else if (item.days_left === 0) {
+  } else if (days === 0) {
     chip.classList.add("bad");
     chip.textContent = "expires today";
-  } else if (item.days_left <= 3) {
+  } else if (days <= 3) {
     chip.classList.add("warn");
-    chip.textContent = `${item.days_left}d left`;
+    chip.textContent = `${days}d left`;
   } else {
-    chip.textContent = `${item.days_left}d left`;
+    chip.textContent = `${days}d left`;
   }
   return chip;
 }
 
-async function renderPantry() {
-  const params = new URLSearchParams();
-  if (state.search) params.set("q", state.search);
-  if (state.expiringOnly) params.set("expiring_within", "3");
-  const qs = params.toString();
-  const items = await api(`/api/pantry${qs ? "?" + qs : ""}`);
+function renderPantry() {
+  const items = listPantry(state, {
+    q: ui.search,
+    expiringWithin: ui.expiringOnly ? 3 : null,
+    today: today(),
+  });
   const ul = $("pantry-items");
   ul.innerHTML = "";
   $("pantry-empty").classList.toggle("hidden", items.length > 0);
@@ -148,15 +168,13 @@ async function renderPantry() {
 
     const expiry = document.createElement("input");
     expiry.type = "date";
-    expiry.value = item.expires_at || "";
+    expiry.value = item.expiresAt || "";
     expiry.title = "Adjust expiry date";
-    expiry.addEventListener("change", async () => {
+    expiry.addEventListener("change", () => {
       if (!expiry.value) return;
-      await api(`/api/pantry/${item.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ expires_at: expiry.value }),
-      });
-      refresh();
+      updatePantryItem(state, item.id, { expiresAt: expiry.value });
+      save();
+      render();
     });
     meta.append(expiry);
     info.append(name, meta);
@@ -168,24 +186,20 @@ async function renderPantry() {
     used.className = "secondary";
     used.textContent = "Used";
     used.title = "Used up — remove from pantry";
-    used.addEventListener("click", async () => {
-      await api(`/api/pantry/${item.id}/use`, {
-        method: "POST",
-        body: JSON.stringify({ add_to_list: false }),
-      });
-      refresh();
+    used.addEventListener("click", () => {
+      usePantryItem(state, item.id, { addToList: false });
+      save();
+      render();
     });
 
     const relist = document.createElement("button");
     relist.className = "secondary";
     relist.textContent = "Used +🛒";
     relist.title = "Used up — add back to grocery list";
-    relist.addEventListener("click", async () => {
-      await api(`/api/pantry/${item.id}/use`, {
-        method: "POST",
-        body: JSON.stringify({ add_to_list: true }),
-      });
-      refresh();
+    relist.addEventListener("click", () => {
+      usePantryItem(state, item.id, { addToList: true });
+      save();
+      render();
     });
 
     actions.append(used, relist);
@@ -194,19 +208,15 @@ async function renderPantry() {
   }
 }
 
-// --- refresh + boot ---
+// --- render + boot ---
 
-async function refresh() {
-  try {
-    if (state.tab === "list") await renderList();
-    else await renderPantry();
-  } catch (err) {
-    console.error(err);
-  }
+function render() {
+  if (ui.tab === "list") renderList();
+  else renderPantry();
 }
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js");
+  navigator.serviceWorker.register("./sw.js");
 }
 
-refresh();
+render();
