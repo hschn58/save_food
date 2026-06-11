@@ -146,6 +146,11 @@ export function daysLeft(item, today) {
   return Math.round(ms / 86400000);
 }
 
+export function daysSince(iso, today) {
+  if (!iso) return null;
+  return Math.round((new Date(today) - new Date(iso)) / 86400000);
+}
+
 // --- grocery list ---
 
 export function addToList(state, { name, quantity = null, category = null }) {

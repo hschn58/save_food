@@ -2,6 +2,7 @@ import {
   addToList,
   checkOff,
   daysLeft,
+  daysSince,
   emptyState,
   isoDate,
   listPantry,
@@ -129,7 +130,8 @@ function daysChip(item) {
     chip.textContent = "no expiry";
   } else if (days < 0) {
     chip.classList.add("bad");
-    chip.textContent = "expired";
+    const inPantry = daysSince(item.addedAt, today());
+    chip.textContent = inPantry === null ? "expired" : `expired · ${inPantry}d in pantry`;
   } else if (days === 0) {
     chip.classList.add("bad");
     chip.textContent = "expires today";

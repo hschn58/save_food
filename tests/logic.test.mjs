@@ -6,6 +6,7 @@ import {
   addToList,
   checkOff,
   daysLeft,
+  daysSince,
   emptyState,
   inferCategory,
   listPantry,
@@ -94,6 +95,8 @@ test("expiry override and days-left math", () => {
   assert.equal(daysLeft(state.pantry[0], TODAY), 2);
   assert.equal(daysLeft({ expiresAt: "2026-06-10" }, TODAY), -1);
   assert.equal(daysLeft({ expiresAt: null }, TODAY), null);
+  assert.equal(daysSince("2026-06-02", TODAY), 9);
+  assert.equal(daysSince(null, TODAY), null);
   assert.equal(updatePantryItem(state, 999, {}), null);
 });
 
