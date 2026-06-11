@@ -187,6 +187,7 @@ function renderPantry() {
     used.textContent = "Used";
     used.title = "Used up — remove from pantry";
     used.addEventListener("click", () => {
+      if (!confirm(`Mark "${item.name}" as used up?`)) return;
       usePantryItem(state, item.id, { addToList: false });
       save();
       render();
@@ -197,6 +198,7 @@ function renderPantry() {
     relist.textContent = "Used +🛒";
     relist.title = "Used up — add back to grocery list";
     relist.addEventListener("click", () => {
+      if (!confirm(`Mark "${item.name}" as used and add it back to the list?`)) return;
       usePantryItem(state, item.id, { addToList: true });
       save();
       render();
