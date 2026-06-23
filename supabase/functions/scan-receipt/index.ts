@@ -44,6 +44,15 @@ Deno.serve(async (req) => {
   const user = userData?.user;
   if (!user) return json({ error: "unauthorized" }, 401);
 
+  // Only allowlisted emails may spend the Anthropic budget. Default-deny: if
+  // ALLOWED_EMAILS is unset, nobody can scan. Set it with
+  //   supabase secrets set ALLOWED_EMAILS="you@example.com,family@example.com"
+  const allowed = (Deno.env.get("ALLOWED_EMAILS") ?? "")
+    .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  if (!allowed.includes((user.email ?? "").toLowerCase())) {
+    return json({ error: "this account is not allowed to scan receipts" }, 403);
+  }
+
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { count } = await supabase
     .from("scan_events")

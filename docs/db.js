@@ -18,7 +18,13 @@ export function onAuthChange(cb) {
 export async function signInWithEmail(email) {
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: window.location.href.split("#")[0] },
+    // Don't create accounts on the fly — only existing users can sign in.
+    // The real enforcement is the Supabase "allow new signups" toggle (off);
+    // this just keeps the client from trying.
+    options: {
+      shouldCreateUser: false,
+      emailRedirectTo: window.location.href.split("#")[0],
+    },
   });
   if (error) throw error;
 }
