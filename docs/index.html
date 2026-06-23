@@ -23,7 +23,12 @@
       <p class="lede">Sign in to sync your list and pantry across your devices.</p>
       <form id="auth-form" autocomplete="off">
         <input id="auth-email" type="email" placeholder="you@example.com" required>
-        <button type="submit">Email me a sign-in link</button>
+        <button type="submit">Email me a code</button>
+      </form>
+      <form id="code-form" class="hidden" autocomplete="off">
+        <input id="auth-code" type="text" inputmode="numeric" autocomplete="one-time-code"
+               placeholder="6-digit code" required>
+        <button type="submit">Sign in</button>
       </form>
       <p id="auth-msg" class="empty hidden"></p>
     </section>

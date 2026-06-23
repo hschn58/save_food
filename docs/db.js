@@ -15,6 +15,10 @@ export function onAuthChange(cb) {
   supabase.auth.onAuthStateChange((_event, session) => cb(session?.user ?? null));
 }
 
+// Emails a 6-digit code (and a magic link as a fallback for desktop browsers).
+// The code path is what makes auth work in an installed PWA: the user types it
+// into this same instance, so the session is created and persisted here rather
+// than in whatever browser the email link would have opened.
 export async function signInWithEmail(email) {
   const { error } = await supabase.auth.signInWithOtp({
     email,
@@ -26,6 +30,11 @@ export async function signInWithEmail(email) {
       emailRedirectTo: window.location.href.split("#")[0],
     },
   });
+  if (error) throw error;
+}
+
+export async function verifyEmailCode(email, token) {
+  const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
   if (error) throw error;
 }
 

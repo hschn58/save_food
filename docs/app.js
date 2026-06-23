@@ -19,6 +19,7 @@ import {
   signInWithEmail,
   signOut,
   updatePantryItem,
+  verifyEmailCode,
 } from "./db.js";
 
 const $ = (id) => document.getElementById(id);
@@ -77,6 +78,12 @@ function showSignedOut() {
   for (const id of ["list-view", "pantry-view", "scan-view", "tabs"]) {
     $(id).classList.add("hidden");
   }
+  // Reset the sign-in form back to step one.
+  $("code-form").classList.add("hidden");
+  $("auth-msg").classList.add("hidden");
+  $("auth-email").value = "";
+  $("auth-code").value = "";
+  pendingEmail = "";
   $("title").textContent = "Save Food";
 }
 
@@ -87,15 +94,34 @@ function showSignedIn() {
   showTab(ui.tab);
 }
 
+// Two-step sign-in: request a code, then verify it in this same instance so
+// the session lands here (works inside an installed PWA).
+let pendingEmail = "";
+
 $("auth-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const email = $("auth-email").value.trim();
   if (!email) return;
   try {
     await signInWithEmail(email);
+    pendingEmail = email;
+    $("code-form").classList.remove("hidden");
+    $("auth-code").focus();
     const msg = $("auth-msg");
-    msg.textContent = `Check ${email} for a sign-in link.`;
+    msg.textContent = `Enter the 6-digit code we emailed to ${email}.`;
     msg.classList.remove("hidden");
+  } catch (err) {
+    fail(err);
+  }
+});
+
+$("code-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const token = $("auth-code").value.trim();
+  if (!token || !pendingEmail) return;
+  try {
+    // On success, onAuthChange fires and swaps in the app.
+    await verifyEmailCode(pendingEmail, token);
   } catch (err) {
     fail(err);
   }
