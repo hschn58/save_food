@@ -8,9 +8,10 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const DAILY_SCAN_LIMIT = 20;
-// Haiku is cheap and reads receipts well; swap the model if you want more
-// accuracy at higher cost.
-const MODEL = "claude-haiku-4-5-20251001";
+// Opus for best accuracy on faded/abbreviated receipts. ~7¢/scan; the
+// workspace monthly spend limit is the backstop. Swap to a cheaper tier
+// (claude-sonnet-4-6) if cost ever matters more than precision.
+const MODEL = "claude-opus-4-8";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
