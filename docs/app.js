@@ -36,7 +36,11 @@ function persistCache() {
 
 function fail(err) {
   console.error(err);
-  alert(err?.message || "Something went wrong. Are you online?");
+  let msg = err?.message || err?.error_description || err?.msg || "";
+  if (!msg || msg === "{}" || msg === "[object Object]") {
+    msg = "Something went wrong. Please try again — check your connection.";
+  }
+  alert(msg);
 }
 
 // --- auth / session ---
