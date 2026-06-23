@@ -1,8 +1,10 @@
 // Network-first with cache fallback: updates flow through automatically,
-// and the app still opens with no connection. All data is in localStorage —
-// the service worker only handles the app shell.
-const CACHE = "save-food-v2";
-const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./logic.js", "./manifest.json"];
+// and the app still opens with no connection. Data lives in Supabase with a
+// localStorage cache (see db.js); the service worker only handles the app
+// shell. The cross-origin supabase-js module is cached on first load by the
+// fetch handler below.
+const CACHE = "save-food-v3";
+const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./logic.js", "./db.js", "./config.js", "./manifest.json"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));

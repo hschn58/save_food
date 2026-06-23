@@ -1,6 +1,7 @@
-// Pure app logic: category inference, shelf-life estimates, and operations
-// on the app state. No DOM, no storage — app.js persists state to
-// localStorage; tests run this under node --test.
+// Pure app logic: category inference, shelf-life estimates, date math, and
+// pure view helpers. No DOM, no network, no state mutation — Supabase is the
+// source of truth (see db.js) and app.js renders. Tests run this under
+// node --test.
 
 export const SHELF_LIFE_DAYS = {
   dairy: 7,
@@ -122,13 +123,8 @@ export function shelfLifeDays(category) {
   return SHELF_LIFE_DAYS[category] ?? SHELF_LIFE_DAYS.other;
 }
 
-// --- state ---
-// state = { nextId, list: [...], pantry: [...] }
+// --- dates ---
 // dates are "YYYY-MM-DD" strings; `today` is injected for testability.
-
-export function emptyState() {
-  return { nextId: 1, list: [], pantry: [] };
-}
 
 export function isoDate(d) {
   return d.toISOString().slice(0, 10);
@@ -151,47 +147,41 @@ export function daysSince(iso, today) {
   return Math.round((new Date(today) - new Date(iso)) / 86400000);
 }
 
-// --- grocery list ---
+// --- payload builders ---
+// Pure shapers that turn raw input (a typed item, or one line off a scanned
+// receipt) into a row payload. The DB assigns the id, so none is set here.
 
-export function addToList(state, { name, quantity = null, category = null }) {
-  name = name.trim();
+export function makeListItem({ name, quantity = null, category = null }) {
+  name = (name || "").trim();
   if (!name) return null;
-  const item = {
-    id: state.nextId++,
+  return {
     name,
     quantity: quantity || null,
     category: category || inferCategory(name),
   };
-  state.list.push(item);
-  return item;
 }
 
-export function removeFromList(state, id) {
-  const before = state.list.length;
-  state.list = state.list.filter((i) => i.id !== id);
-  return state.list.length < before;
-}
-
-export function checkOff(state, id, today) {
-  const item = state.list.find((i) => i.id === id);
-  if (!item) return null;
-  state.list = state.list.filter((i) => i.id !== id);
-  const pantryItem = {
-    id: state.nextId++,
-    name: item.name,
-    quantity: item.quantity,
-    category: item.category,
+// The pantry is filled from receipts, not from checking off the list, so this
+// is where a bought item gets its category guess and an estimated expiry.
+export function makePantryItem({ name, quantity = null, category = null }, today) {
+  name = (name || "").trim();
+  if (!name) return null;
+  const cat = category || inferCategory(name);
+  return {
+    name,
+    quantity: quantity || null,
+    category: cat,
     addedAt: today,
-    expiresAt: addDays(today, shelfLifeDays(item.category)),
+    expiresAt: addDays(today, shelfLifeDays(cat)),
   };
-  state.pantry.push(pantryItem);
-  return pantryItem;
 }
 
-// --- pantry ---
+// --- pantry view ---
+// Pure filter + sort over a pantry array, for rendering. Soonest-to-expire
+// first; items with no expiry sink to the bottom; ties break by addedAt.
 
-export function listPantry(state, { q = "", expiringWithin = null, today } = {}) {
-  let items = state.pantry;
+export function listPantry(pantry, { q = "", expiringWithin = null, today } = {}) {
+  let items = pantry;
   if (q) {
     const needle = q.toLowerCase();
     items = items.filter((i) => i.name.toLowerCase().includes(needle));
@@ -203,36 +193,7 @@ export function listPantry(state, { q = "", expiringWithin = null, today } = {})
   return [...items].sort((a, b) => {
     if (!a.expiresAt) return 1;
     if (!b.expiresAt) return -1;
-    return a.expiresAt < b.expiresAt ? -1 : a.expiresAt > b.expiresAt ? 1 : a.id - b.id;
+    if (a.expiresAt !== b.expiresAt) return a.expiresAt < b.expiresAt ? -1 : 1;
+    return (a.addedAt || "") < (b.addedAt || "") ? -1 : 1;
   });
-}
-
-export function updatePantryItem(state, id, fields) {
-  const item = state.pantry.find((i) => i.id === id);
-  if (!item) return null;
-  for (const key of ["name", "quantity", "category", "expiresAt"]) {
-    if (key in fields) item[key] = fields[key];
-  }
-  return item;
-}
-
-export function usePantryItem(state, id, { addToList: relist = false } = {}) {
-  const item = state.pantry.find((i) => i.id === id);
-  if (!item) return { found: false, groceryItem: null };
-  state.pantry = state.pantry.filter((i) => i.id !== id);
-  let groceryItem = null;
-  if (relist) {
-    groceryItem = addToList(state, {
-      name: item.name,
-      quantity: item.quantity,
-      category: item.category,
-    });
-  }
-  return { found: true, groceryItem };
-}
-
-export function removeFromPantry(state, id) {
-  const before = state.pantry.length;
-  state.pantry = state.pantry.filter((i) => i.id !== id);
-  return state.pantry.length < before;
 }

@@ -14,11 +14,21 @@
 </head>
 <body>
   <header>
-    <h1 id="title">Grocery List</h1>
+    <h1 id="title">Save Food</h1>
+    <button id="sign-out" class="link hidden" type="button">Sign out</button>
   </header>
 
   <main>
-    <section id="list-view">
+    <section id="auth-view" class="hidden">
+      <p class="lede">Sign in to sync your list and pantry across your devices.</p>
+      <form id="auth-form" autocomplete="off">
+        <input id="auth-email" type="email" placeholder="you@example.com" required>
+        <button type="submit">Email me a sign-in link</button>
+      </form>
+      <p id="auth-msg" class="empty hidden"></p>
+    </section>
+
+    <section id="list-view" class="hidden">
       <form id="add-form" autocomplete="off">
         <input id="add-name" type="text" placeholder="Add an item (e.g. milk)" required>
         <input id="add-qty" type="text" placeholder="Qty">
@@ -33,12 +43,24 @@
         <input id="search" type="search" placeholder="Search your pantry">
         <button id="expiring-toggle" type="button">Expiring soon</button>
       </div>
+      <button id="scan-btn" class="scan" type="button">📷 Scan receipt</button>
+      <input id="scan-file" type="file" accept="image/*" capture="environment" hidden>
       <ul id="pantry-items" class="items"></ul>
-      <p id="pantry-empty" class="empty hidden">Nothing here yet. Check items off your list and they land here.</p>
+      <p id="pantry-empty" class="empty hidden">Nothing here yet. Scan a grocery receipt to fill your pantry.</p>
+    </section>
+
+    <section id="scan-view" class="hidden">
+      <p class="lede">Review the items, then add them to your pantry.</p>
+      <ul id="scan-items" class="items"></ul>
+      <button id="scan-add-row" class="link" type="button">+ Add a row</button>
+      <div class="scan-actions">
+        <button id="scan-cancel" class="secondary" type="button">Cancel</button>
+        <button id="scan-confirm" type="button">Add to pantry</button>
+      </div>
     </section>
   </main>
 
-  <nav>
+  <nav id="tabs" class="hidden">
     <button id="tab-list" class="tab active" type="button">🛒 List</button>
     <button id="tab-pantry" class="tab" type="button">🥫 Pantry</button>
   </nav>
