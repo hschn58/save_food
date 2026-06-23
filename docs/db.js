@@ -119,6 +119,11 @@ export async function removePantryItem(id) {
 
 // --- receipt scan ---
 
+// Anthropic's sweet spot is ~1568px on the long edge; bigger images cost more
+// tokens and can be rejected. A phone receipt photo is usually several MB, so
+// downscale and re-encode as JPEG before upload.
+const MAX_EDGE = 1568;
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -128,10 +133,28 @@ function fileToBase64(file) {
   });
 }
 
+async function imageToPayload(file) {
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, w, h);
+    bitmap.close();
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    return { image_base64: dataUrl.split(",")[1], media_type: "image/jpeg" };
+  } catch {
+    // Browser couldn't decode it (rare) — send the original bytes as-is.
+    return { image_base64: await fileToBase64(file), media_type: file.type };
+  }
+}
+
 export async function scanReceipt(file) {
-  const image_base64 = await fileToBase64(file);
   const { data, error } = await supabase.functions.invoke("scan-receipt", {
-    body: { image_base64, media_type: file.type },
+    body: await imageToPayload(file),
   });
   if (error) throw error;
   return data.items ?? [];

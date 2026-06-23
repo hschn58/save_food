@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 1024,
+      max_tokens: 2048,
       tools: [{
         name: "record_items",
         description: "Record every grocery item found on the receipt.",
@@ -124,6 +124,10 @@ Deno.serve(async (req) => {
   });
 
   if (!anthropicRes.ok) {
+    // Surface the cause in the function logs (`supabase functions logs
+    // scan-receipt`) — most first-deploy issues are a bad/missing key or an
+    // oversized image.
+    console.error("anthropic error", anthropicRes.status, await anthropicRes.text());
     return json({ error: "vision request failed" }, 502);
   }
 
