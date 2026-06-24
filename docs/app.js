@@ -10,6 +10,7 @@ import {
   addListItem,
   addPantryItems,
   cacheState,
+  estimateExpiry,
   fetchAll,
   onAuthChange,
   readCache,
@@ -420,20 +421,40 @@ $("scan-add-row").addEventListener("click", () => {
 $("scan-cancel").addEventListener("click", () => showTab("pantry"));
 
 $("scan-confirm").addEventListener("click", async () => {
-  const payloads = ui.scanItems
-    .map((entry) => makePantryItem(entry, today()))
-    .filter(Boolean);
-  if (!payloads.length) {
+  const entries = ui.scanItems
+    .map((e) => ({ name: (e.name || "").trim(), quantity: e.quantity || null }))
+    .filter((e) => e.name);
+  if (!entries.length) {
     showTab("pantry");
     return;
   }
+  const btn = $("scan-confirm");
+  btn.disabled = true;
+  btn.textContent = "Estimating expiry…";
   try {
+    // Ask the model for a per-item shelf life on the confirmed names; fall back
+    // to the category estimate if it fails so adding never blocks.
+    const daysByName = {};
+    try {
+      for (const est of await estimateExpiry(entries)) {
+        const d = Number(est?.days);
+        if (est?.name && Number.isFinite(d) && d > 0) daysByName[est.name.toLowerCase()] = d;
+      }
+    } catch (err) {
+      console.warn("expiry estimate failed, using category defaults", err);
+    }
+    const payloads = entries
+      .map((e) => makePantryItem(e, today(), daysByName[e.name.toLowerCase()]))
+      .filter(Boolean);
     const rows = await addPantryItems(payloads);
     state.pantry.push(...rows);
     persistCache();
     showTab("pantry");
   } catch (err) {
     fail(err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Add to pantry";
   }
 });
 

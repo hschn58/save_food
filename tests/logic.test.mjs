@@ -63,6 +63,14 @@ test("makePantryItem sets category + estimated expiry, no id", () => {
   assert.equal(makePantryItem({ name: "  " }, TODAY), null);
 });
 
+test("makePantryItem uses a supplied shelf life over the category default", () => {
+  const milk = makePantryItem({ name: "milk" }, TODAY, 3); // override dairy's 7
+  assert.equal(milk.expiresAt, "2026-06-14");
+  // invalid/missing days fall back to the category estimate
+  assert.equal(makePantryItem({ name: "milk" }, TODAY, 0).expiresAt, "2026-06-18");
+  assert.equal(makePantryItem({ name: "milk" }, TODAY, null).expiresAt, "2026-06-18");
+});
+
 test("days-left and days-since math", () => {
   assert.equal(daysLeft({ expiresAt: "2026-06-13" }, TODAY), 2);
   assert.equal(daysLeft({ expiresAt: "2026-06-10" }, TODAY), -1);

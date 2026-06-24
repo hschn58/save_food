@@ -163,16 +163,19 @@ export function makeListItem({ name, quantity = null, category = null }) {
 
 // The pantry is filled from receipts, not from checking off the list, so this
 // is where a bought item gets its category guess and an estimated expiry.
-export function makePantryItem({ name, quantity = null, category = null }, today) {
+// `days` is an optional model-supplied shelf life; without it (or if invalid)
+// we fall back to the coarse per-category estimate.
+export function makePantryItem({ name, quantity = null, category = null }, today, days = null) {
   name = (name || "").trim();
   if (!name) return null;
   const cat = category || inferCategory(name);
+  const shelf = Number.isFinite(days) && days > 0 ? days : shelfLifeDays(cat);
   return {
     name,
     quantity: quantity || null,
     category: cat,
     addedAt: today,
-    expiresAt: addDays(today, shelfLifeDays(cat)),
+    expiresAt: addDays(today, shelf),
   };
 }
 

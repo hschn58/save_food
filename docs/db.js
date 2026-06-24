@@ -201,6 +201,21 @@ export async function scanReceipt(file) {
   ]);
 }
 
+// Per-item shelf-life estimates for the confirmed names. Returns
+// [{ name, days }]; callers treat failure as "use the category default".
+export async function estimateExpiry(items) {
+  return Promise.race([
+    (async () => {
+      const { data, error } = await supabase.functions.invoke("super-api", {
+        body: { items: items.map((i) => ({ name: i.name })) },
+      });
+      if (error) throw error;
+      return data.estimates ?? [];
+    })(),
+    timeout(45000),
+  ]);
+}
+
 // --- offline read cache (per user) ---
 
 const cacheKey = (uid) => `save-food-cache:${uid}`;
