@@ -162,7 +162,9 @@ async function imageToPayload(file) {
 }
 
 export async function scanReceipt(file) {
-  const { data, error } = await supabase.functions.invoke("scan-receipt", {
+  // Function is deployed under Supabase's placeholder name "super-api"; the
+  // code is ours (supabase/functions/scan-receipt/index.ts).
+  const { data, error } = await supabase.functions.invoke("super-api", {
     body: await imageToPayload(file),
   });
   if (error) throw error;
