@@ -3,7 +3,7 @@
 // localStorage cache (see db.js); the service worker only handles the app
 // shell. The cross-origin supabase-js module is cached on first load by the
 // fetch handler below.
-const CACHE = "save-food-v8";
+const CACHE = "save-food-v9";
 const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./logic.js", "./db.js", "./config.js", "./manifest.json"];
 
 self.addEventListener("install", (e) => {

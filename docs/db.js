@@ -142,21 +142,35 @@ function fileToBase64(file) {
   });
 }
 
+// Load via an <img> element (well-supported on iOS Safari, unlike
+// createImageBitmap's options bag, which could hang the PWA). Guarded so a
+// decode that never fires can't stall the whole scan.
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("decode failed")); };
+    img.src = url;
+  });
+}
+
 async function imageToPayload(file) {
   try {
-    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-    const w = Math.round(bitmap.width * scale);
-    const h = Math.round(bitmap.height * scale);
+    const img = await Promise.race([loadImage(file), timeout(15000)]);
+    const scale = Math.min(1, MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.round(img.naturalWidth * scale);
+    const h = Math.round(img.naturalHeight * scale);
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    canvas.getContext("2d").drawImage(bitmap, 0, 0, w, h);
-    bitmap.close();
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-    return { image_base64: dataUrl.split(",")[1], media_type: "image/jpeg" };
+    canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+    const b64 = canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
+    if (!b64) throw new Error("encode failed");
+    return { image_base64: b64, media_type: "image/jpeg" };
   } catch {
-    // Browser couldn't decode it (rare) — send the original bytes as-is.
+    // Downscale failed/timed out — send the original bytes so the scan still
+    // reaches the server instead of hanging.
     return { image_base64: await fileToBase64(file), media_type: file.type };
   }
 }
