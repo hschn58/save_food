@@ -161,14 +161,30 @@ async function imageToPayload(file) {
   }
 }
 
+function timeout(ms) {
+  return new Promise((_, reject) =>
+    setTimeout(
+      () => reject(new Error("Timed out reading the receipt. Try a stronger connection or a clearer photo.")),
+      ms,
+    )
+  );
+}
+
 export async function scanReceipt(file) {
   // Function is deployed under Supabase's placeholder name "super-api"; the
-  // code is ours (supabase/functions/scan-receipt/index.ts).
-  const { data, error } = await supabase.functions.invoke("super-api", {
-    body: await imageToPayload(file),
-  });
-  if (error) throw error;
-  return data.items ?? [];
+  // code is ours (supabase/functions/scan-receipt/index.ts). Race against a
+  // timeout so a stalled upload or slow model surfaces an error instead of
+  // hanging the UI forever.
+  return Promise.race([
+    (async () => {
+      const { data, error } = await supabase.functions.invoke("super-api", {
+        body: await imageToPayload(file),
+      });
+      if (error) throw error;
+      return data.items ?? [];
+    })(),
+    timeout(90000),
+  ]);
 }
 
 // --- offline read cache (per user) ---
