@@ -112,7 +112,7 @@ $("auth-form").addEventListener("submit", async (e) => {
     $("code-form").classList.remove("hidden");
     $("auth-code").focus();
     const msg = $("auth-msg");
-    msg.textContent = `Enter the 6-digit code we emailed to ${email}.`;
+    msg.textContent = `Enter the code we emailed to ${email}.`;
     msg.classList.remove("hidden");
   } catch (err) {
     fail(err);
