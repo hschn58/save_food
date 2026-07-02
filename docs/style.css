@@ -57,13 +57,23 @@ main { padding: 12px; }
 .hidden { display: none !important; }
 
 /* add form / toolbar */
-#add-form, .toolbar {
+#add-form, #ask-form, .toolbar {
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
 }
 
-#add-name, #search { flex: 1; }
+#add-name, #search, #ask-q { flex: 1; min-width: 0; }
+
+/* AI answer card */
+.answer {
+  background: var(--green-light);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+  font-size: 0.95rem;
+}
 
 #add-qty { width: 64px; }
 

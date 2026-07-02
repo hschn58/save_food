@@ -9,6 +9,7 @@ import {
 import {
   addListItem,
   addPantryItems,
+  askPantry,
   cacheState,
   estimateExpiry,
   fetchAll,
@@ -344,6 +345,34 @@ function renderPantry() {
     ul.append(li);
   }
 }
+
+// --- ask about the pantry ---
+
+$("ask-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const q = $("ask-q").value.trim();
+  if (!q) return;
+  const btn = $("ask-btn");
+  btn.disabled = true;
+  btn.textContent = "Thinking…";
+  $("ask-answer").classList.add("hidden");
+  try {
+    const pantry = state.pantry.map((i) => ({
+      name: i.name,
+      quantity: i.quantity,
+      daysLeft: daysLeft(i, today()),
+    }));
+    const list = state.list.map((i) => ({ name: i.name, quantity: i.quantity }));
+    const answer = await askPantry(q, pantry, list);
+    $("ask-answer").textContent = answer;
+    $("ask-answer").classList.remove("hidden");
+  } catch (err) {
+    fail(err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Ask";
+  }
+});
 
 // --- receipt scan ---
 

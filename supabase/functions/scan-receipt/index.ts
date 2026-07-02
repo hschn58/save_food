@@ -6,9 +6,10 @@
 // authenticated, allowlisted Supabase user; the scan path enforces a per-user
 // daily cap on top of the workspace-level monthly spend limit.
 //
-// Two request shapes:
+// Three request shapes:
 //   { image_base64, media_type }  -> { items: [{name, quantity}] }   (vision)
 //   { items: [{name}] }           -> { estimates: [{name, days}] }   (text)
+//   { question, pantry, list }    -> { answer }                      (text)
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -17,6 +18,9 @@ const DAILY_SCAN_LIMIT = 20;
 const SCAN_MODEL = "claude-opus-4-8";
 // Text: Haiku is plenty for "how long does X keep" and costs a fraction of a cent.
 const EXPIRY_MODEL = "claude-haiku-4-5-20251001";
+// Pantry Q&A: Sonnet for better recipe/meal reasoning; still well under a cent
+// per question at pantry-sized inputs.
+const ANSWER_MODEL = "claude-sonnet-5";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -30,8 +34,8 @@ const json = (body: unknown, status = 200) =>
     headers: { ...cors, "content-type": "application/json" },
   });
 
-// Calls Anthropic with a forced tool and returns the tool input, or null on
-// any failure (logged for `supabase functions logs`).
+// Calls Anthropic and returns the parsed response, or null on any failure
+// (logged for `supabase functions logs`).
 async function anthropic(payload: unknown) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -46,9 +50,13 @@ async function anthropic(payload: unknown) {
     console.error("anthropic error", res.status, await res.text());
     return null;
   }
-  const result = await res.json();
-  const toolUse = result.content?.find((b: { type: string }) => b.type === "tool_use");
-  return toolUse?.input ?? null;
+  return await res.json();
+}
+
+// The forced-tool input from a response, or null.
+function toolInput(result: { content?: { type: string }[] } | null) {
+  const toolUse = result?.content?.find((b: { type: string }) => b.type === "tool_use");
+  return (toolUse as { input?: unknown } | undefined)?.input ?? null;
 }
 
 Deno.serve(async (req) => {
@@ -79,18 +87,61 @@ Deno.serve(async (req) => {
     return json({ error: "this account is not allowed to scan receipts" }, 403);
   }
 
-  let body: { image_base64?: string; media_type?: string; items?: { name?: string }[] };
+  let body: {
+    image_base64?: string;
+    media_type?: string;
+    items?: { name?: string }[];
+    question?: string;
+    pantry?: { name?: string; quantity?: string; daysLeft?: number }[];
+    list?: { name?: string; quantity?: string }[];
+  };
   try {
     body = await req.json();
   } catch {
     return json({ error: "invalid JSON body" }, 400);
   }
 
+  // --- pantry Q&A mode (text; not counted against the daily scan cap) ---
+  if (typeof body.question === "string") {
+    const q = body.question.trim().slice(0, 500);
+    if (!q) return json({ error: "empty question" }, 400);
+    const fmtItem = (i: { name?: string; quantity?: string; daysLeft?: number }) => {
+      let line = `- ${i.name}`;
+      if (i.quantity) line += ` (${i.quantity})`;
+      if (Number.isFinite(i.daysLeft)) {
+        line += i.daysLeft! < 0 ? " [expired]" : ` [${i.daysLeft}d left]`;
+      }
+      return line;
+    };
+    const pantry = (Array.isArray(body.pantry) ? body.pantry : []).slice(0, 300).map(fmtItem);
+    const list = (Array.isArray(body.list) ? body.list : []).slice(0, 200).map(fmtItem);
+    const result = await anthropic({
+      model: ANSWER_MODEL,
+      max_tokens: 700,
+      system:
+        "You are a kitchen assistant for a pantry-tracking app. Answer using " +
+        "only the user's pantry and grocery list below. Be concise and " +
+        "practical. For recipe questions, say clearly what they have and " +
+        "what's missing; assume basic staples like water and salt. Prefer " +
+        "using items that expire soonest. Plain text only, no markdown.",
+      messages: [{
+        role: "user",
+        content:
+          `My pantry:\n${pantry.join("\n") || "(empty)"}\n\n` +
+          `My grocery list (not bought yet):\n${list.join("\n") || "(empty)"}\n\n` +
+          `Question: ${q}`,
+      }],
+    });
+    const answer = result?.content?.find((b: { type: string }) => b.type === "text")?.text;
+    if (!answer) return json({ error: "answer failed" }, 502);
+    return json({ answer });
+  }
+
   // --- expiry estimation mode (text; not counted against the daily scan cap) ---
   if (Array.isArray(body.items)) {
     const names = body.items.map((i) => (i?.name ?? "").toString().trim()).filter(Boolean);
     if (!names.length) return json({ estimates: [] });
-    const out = await anthropic({
+    const out = toolInput(await anthropic({
       model: EXPIRY_MODEL,
       max_tokens: 1024,
       tools: [{
@@ -123,7 +174,7 @@ Deno.serve(async (req) => {
         content: "Estimate the shelf life for each grocery item:\n" +
           names.map((n) => `- ${n}`).join("\n"),
       }],
-    });
+    })) as { items?: unknown[] } | null;
     if (!out) return json({ error: "expiry estimate failed" }, 502);
     return json({ estimates: out.items ?? [] });
   }
@@ -143,7 +194,7 @@ Deno.serve(async (req) => {
     return json({ error: "image_base64 and media_type are required" }, 400);
   }
 
-  const out = await anthropic({
+  const out = toolInput(await anthropic({
     model: SCAN_MODEL,
     max_tokens: 2048,
     tools: [{
@@ -180,7 +231,7 @@ Deno.serve(async (req) => {
         },
       ],
     }],
-  });
+  })) as { items?: unknown[] } | null;
   if (!out) return json({ error: "vision request failed" }, 502);
 
   await supabase.from("scan_events").insert({ user_id: user.id });

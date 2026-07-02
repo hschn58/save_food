@@ -201,6 +201,22 @@ export async function scanReceipt(file) {
   ]);
 }
 
+// Ask a free-form question about the pantry. `pantry` and `list` are
+// plain {name, quantity, daysLeft} snapshots built by the caller.
+export async function askPantry(question, pantry, list) {
+  return Promise.race([
+    (async () => {
+      const { data, error } = await supabase.functions.invoke("super-api", {
+        body: { question, pantry, list },
+      });
+      if (error) throw error;
+      if (!data.answer) throw new Error("No answer came back. Try again.");
+      return data.answer;
+    })(),
+    timeout(60000),
+  ]);
+}
+
 // Per-item shelf-life estimates for the confirmed names. Returns
 // [{ name, days }]; callers treat failure as "use the category default".
 export async function estimateExpiry(items) {

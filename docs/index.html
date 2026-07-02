@@ -50,6 +50,11 @@
       </div>
       <button id="scan-btn" class="scan" type="button">📷 Scan receipt</button>
       <input id="scan-file" type="file" accept="image/*" capture="environment" hidden>
+      <form id="ask-form" autocomplete="off">
+        <input id="ask-q" type="text" placeholder="Ask about your pantry (e.g. what's for dinner?)">
+        <button id="ask-btn" type="submit">Ask</button>
+      </form>
+      <p id="ask-answer" class="answer hidden"></p>
       <ul id="pantry-items" class="items"></ul>
       <p id="pantry-empty" class="empty hidden">Nothing here yet. Scan a grocery receipt to fill your pantry.</p>
     </section>
