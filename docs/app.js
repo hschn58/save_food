@@ -162,7 +162,12 @@ $("sign-out").addEventListener("click", () => signOut());
 
 // --- tabs ---
 
-function showTab(tab) {
+function showTab(tab, { discardScan = false } = {}) {
+  // A mis-tap on a tab shouldn't silently throw away an in-progress scan
+  // review. Callers that have already saved (or explicitly discarded) the
+  // items pass discardScan to skip the prompt.
+  const reviewing = ui.scanItems && !$("scan-view").classList.contains("hidden");
+  if (reviewing && !discardScan && !confirm("Discard the scanned items?")) return;
   ui.tab = tab;
   ui.scanItems = null;
   $("list-view").classList.toggle("hidden", tab !== "list");
@@ -503,7 +508,7 @@ $("scan-confirm").addEventListener("click", async () => {
     }))
     .filter((e) => e.name);
   if (!entries.length) {
-    showTab("pantry");
+    showTab("pantry", { discardScan: true });
     return;
   }
   const btn = $("scan-confirm");
@@ -530,7 +535,7 @@ $("scan-confirm").addEventListener("click", async () => {
     const rows = await addPantryItems(payloads);
     state.pantry.push(...rows);
     persistCache();
-    showTab("pantry");
+    showTab("pantry", { discardScan: true });
   } catch (err) {
     fail(err);
   } finally {
