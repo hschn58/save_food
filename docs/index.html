@@ -48,7 +48,10 @@
         <input id="search" type="search" placeholder="Search your pantry">
         <button id="expiring-toggle" type="button">Expiring soon</button>
       </div>
-      <button id="scan-btn" class="scan" type="button">📷 Scan receipt</button>
+      <div class="scan-row">
+        <button id="scan-btn" class="scan" type="button">📷 Scan receipt</button>
+        <button id="shelf-btn" class="scan" type="button">🥫 Scan shelf</button>
+      </div>
       <input id="scan-file" type="file" accept="image/*" capture="environment" hidden>
       <form id="ask-form" autocomplete="off">
         <input id="ask-q" type="text" placeholder="Ask about your pantry (e.g. what's for dinner?)">
@@ -56,11 +59,11 @@
       </form>
       <p id="ask-answer" class="answer hidden"></p>
       <ul id="pantry-items" class="items"></ul>
-      <p id="pantry-empty" class="empty hidden">Nothing here yet. Scan a grocery receipt to fill your pantry.</p>
+      <p id="pantry-empty" class="empty hidden">Nothing here yet. Scan a grocery receipt — or snap a photo of your shelves — to fill your pantry.</p>
     </section>
 
     <section id="scan-view" class="hidden">
-      <p class="lede">Review the items, then add them to your pantry.</p>
+      <p class="lede">Review the items and set expiry dates you know — anything left blank gets an automatic estimate.</p>
       <ul id="scan-items" class="items"></ul>
       <button id="scan-add-row" class="link" type="button">+ Add a row</button>
       <div class="scan-actions">

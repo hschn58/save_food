@@ -188,10 +188,15 @@ button {
   margin-top: 32px;
 }
 
-/* receipt scan */
-.scan {
-  width: 100%;
+/* receipt / shelf scan */
+.scan-row {
+  display: flex;
+  gap: 8px;
   margin-bottom: 12px;
+}
+
+.scan {
+  flex: 1;
   background: var(--card);
   color: var(--green);
   border: 1px solid var(--green);
@@ -199,9 +204,10 @@ button {
 
 .scan:disabled { opacity: 0.6; }
 
-.scan-fields { display: flex; gap: 8px; }
+.scan-fields { display: flex; gap: 8px; flex-wrap: wrap; }
 .scan-fields input { flex: 1; min-width: 0; }
 .scan-fields input.qty { flex: 0 0 64px; }
+.scan-fields input[type="date"] { flex: 1 0 100%; }
 
 .scan-actions {
   display: flex;

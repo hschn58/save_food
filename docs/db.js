@@ -185,7 +185,9 @@ function withTimeout(promise, ms, message) {
   return Promise.race([promise, deadline]).finally(() => clearTimeout(t));
 }
 
-export async function scanReceipt(file) {
+// `source` is "receipt" or "shelf" — same extraction pipeline, different
+// vision prompt server-side.
+export async function scanReceipt(file, source = "receipt") {
   // Function is deployed under Supabase's placeholder name "super-api"; the
   // code is ours (supabase/functions/scan-receipt/index.ts). Race against a
   // timeout so a stalled upload or slow model surfaces an error instead of
@@ -193,13 +195,13 @@ export async function scanReceipt(file) {
   return withTimeout(
     (async () => {
       const { data, error } = await supabase.functions.invoke("super-api", {
-        body: await imageToPayload(file),
+        body: { ...(await imageToPayload(file)), source },
       });
       if (error) throw error;
       return data.items ?? [];
     })(),
     90000,
-    "Timed out reading the receipt. Try a stronger connection or a clearer photo.",
+    "Timed out reading the photo. Try a stronger connection or a clearer shot.",
   );
 }
 

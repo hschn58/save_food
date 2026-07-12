@@ -30,7 +30,14 @@ const today = () => isoDate(new Date());
 // In-memory render cache. Supabase is the source of truth; this mirrors it and
 // is persisted to localStorage so the app paints instantly and works offline.
 const state = { user: null, list: [], pantry: [] };
-const ui = { tab: "list", search: "", expiringOnly: false, scanItems: null, askHistory: [] };
+const ui = {
+  tab: "list",
+  search: "",
+  expiringOnly: false,
+  scanItems: null,
+  scanSource: "receipt",
+  askHistory: [],
+};
 
 function persistCache() {
   if (state.user) cacheState(state.user.id, { list: state.list, pantry: state.pantry });
@@ -378,25 +385,37 @@ $("ask-form").addEventListener("submit", async (e) => {
   }
 });
 
-// --- receipt scan ---
+// --- receipt / shelf scan ---
+// Both buttons share one file input; ui.scanSource picks the vision prompt.
 
-$("scan-btn").addEventListener("click", () => $("scan-file").click());
+$("scan-btn").addEventListener("click", () => {
+  ui.scanSource = "receipt";
+  $("scan-file").click();
+});
+
+$("shelf-btn").addEventListener("click", () => {
+  ui.scanSource = "shelf";
+  $("scan-file").click();
+});
 
 $("scan-file").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   e.target.value = ""; // allow re-picking the same file
   if (!file) return;
-  $("scan-btn").disabled = true;
-  $("scan-btn").textContent = "Reading receipt…";
+  const shelf = ui.scanSource === "shelf";
+  const btn = shelf ? $("shelf-btn") : $("scan-btn");
+  const idle = shelf ? "🥫 Scan shelf" : "📷 Scan receipt";
+  btn.disabled = true;
+  btn.textContent = shelf ? "Reading photo…" : "Reading receipt…";
   try {
-    const items = await scanReceipt(file);
+    const items = await scanReceipt(file, ui.scanSource);
     ui.scanItems = items.length ? items : [{ name: "", quantity: "" }];
     showScan();
   } catch (err) {
     fail(err);
   } finally {
-    $("scan-btn").disabled = false;
-    $("scan-btn").textContent = "📷 Scan receipt";
+    btn.disabled = false;
+    btn.textContent = idle;
   }
 });
 
@@ -427,7 +446,12 @@ function renderScan() {
     qty.placeholder = "Qty";
     qty.className = "qty";
     qty.addEventListener("input", () => { ui.scanItems[idx].quantity = qty.value; });
-    info.append(name, qty);
+    const expiry = document.createElement("input");
+    expiry.type = "date";
+    expiry.value = entry.expiresAt || "";
+    expiry.title = "Expiry date (optional — estimated if left blank)";
+    expiry.addEventListener("change", () => { ui.scanItems[idx].expiresAt = expiry.value; });
+    info.append(name, qty, expiry);
 
     const actions = document.createElement("div");
     actions.className = "actions";
@@ -455,7 +479,11 @@ $("scan-cancel").addEventListener("click", () => showTab("pantry"));
 
 $("scan-confirm").addEventListener("click", async () => {
   const entries = ui.scanItems
-    .map((e) => ({ name: (e.name || "").trim(), quantity: e.quantity || null }))
+    .map((e) => ({
+      name: (e.name || "").trim(),
+      quantity: e.quantity || null,
+      expiresAt: e.expiresAt || null,
+    }))
     .filter((e) => e.name);
   if (!entries.length) {
     showTab("pantry");
@@ -465,13 +493,16 @@ $("scan-confirm").addEventListener("click", async () => {
   btn.disabled = true;
   btn.textContent = "Estimating expiry…";
   try {
-    // Ask the model for a per-item shelf life on the confirmed names; fall back
+    // Ask the model for a shelf life for rows the user didn't date; fall back
     // to the category estimate if it fails so adding never blocks.
     const daysByName = {};
+    const undated = entries.filter((e) => !e.expiresAt);
     try {
-      for (const est of await estimateExpiry(entries)) {
-        const d = Number(est?.days);
-        if (est?.name && Number.isFinite(d) && d > 0) daysByName[est.name.toLowerCase()] = d;
+      if (undated.length) {
+        for (const est of await estimateExpiry(undated)) {
+          const d = Number(est?.days);
+          if (est?.name && Number.isFinite(d) && d > 0) daysByName[est.name.toLowerCase()] = d;
+        }
       }
     } catch (err) {
       console.warn("expiry estimate failed, using category defaults", err);

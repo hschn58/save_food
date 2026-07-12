@@ -7,7 +7,9 @@
 // daily cap on top of the workspace-level monthly spend limit.
 //
 // Three request shapes:
-//   { image_base64, media_type }  -> { items: [{name, quantity}] }   (vision)
+//   { image_base64, media_type, source? }  -> { items: [{name, quantity}] }  (vision;
+//       source "receipt" (default) reads a receipt, "shelf" inventories a
+//       photo of a pantry/fridge/shelf)
 //   { items: [{name}] }           -> { estimates: [{name, days}] }   (text)
 //   { question, pantry, list }    -> { answer }                      (text)
 
@@ -90,6 +92,7 @@ Deno.serve(async (req) => {
   let body: {
     image_base64?: string;
     media_type?: string;
+    source?: string;
     items?: { name?: string }[];
     question?: string;
     pantry?: { name?: string; quantity?: string; daysLeft?: number }[];
@@ -202,12 +205,15 @@ Deno.serve(async (req) => {
     return json({ error: "image_base64 and media_type are required" }, 400);
   }
 
+  const isShelf = body.source === "shelf";
   const out = toolInput(await anthropic({
     model: SCAN_MODEL,
     max_tokens: 2048,
     tools: [{
       name: "record_items",
-      description: "Record every grocery item found on the receipt.",
+      description: isShelf
+        ? "Record every food item visible in the photo."
+        : "Record every grocery item found on the receipt.",
       input_schema: {
         type: "object",
         properties: {
@@ -233,9 +239,16 @@ Deno.serve(async (req) => {
         { type: "image", source: { type: "base64", media_type, data: image_base64 } },
         {
           type: "text",
-          text: "Extract every grocery/food line item from this receipt. " +
-            "Expand abbreviations to normal names. Skip totals, tax, " +
-            "discounts, and non-food items.",
+          text: isShelf
+            ? "This is a photo of a pantry, refrigerator, or kitchen shelf. " +
+              "List every distinct food or drink item you can identify. Use " +
+              "clean everyday names ('peanut butter', 'eggs'). For quantity, " +
+              "give a visible count when countable ('2 jars'), else leave it " +
+              "empty. Skip dishes, appliances, and anything you can't " +
+              "identify with reasonable confidence."
+            : "Extract every grocery/food line item from this receipt. " +
+              "Expand abbreviations to normal names. Skip totals, tax, " +
+              "discounts, and non-food items.",
         },
       ],
     }],

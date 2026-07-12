@@ -71,6 +71,11 @@ test("makePantryItem uses a supplied shelf life over the category default", () =
   assert.equal(makePantryItem({ name: "milk" }, TODAY, null).expiresAt, "2026-06-18");
 });
 
+test("makePantryItem prefers a user-entered expiry date over any estimate", () => {
+  const milk = makePantryItem({ name: "milk", expiresAt: "2026-07-01" }, TODAY, 3);
+  assert.equal(milk.expiresAt, "2026-07-01");
+});
+
 test("days-left and days-since math", () => {
   assert.equal(daysLeft({ expiresAt: "2026-06-13" }, TODAY), 2);
   assert.equal(daysLeft({ expiresAt: "2026-06-10" }, TODAY), -1);
