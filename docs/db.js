@@ -239,6 +239,35 @@ export async function estimateExpiry(items) {
   );
 }
 
+// --- realtime ---
+// Watch both tables and ping the callback (debounced — one burst of events =
+// one refetch) so every signed-in device converges within ~a second of any
+// other device's change. Requires the tables to be in the
+// supabase_realtime publication.
+
+let channel = null;
+
+export function subscribeToChanges(onChange) {
+  unsubscribeChanges();
+  let t;
+  const ping = () => {
+    clearTimeout(t);
+    t = setTimeout(onChange, 400);
+  };
+  channel = supabase
+    .channel("pantry-sync")
+    .on("postgres_changes", { event: "*", schema: "public", table: "pantry_items" }, ping)
+    .on("postgres_changes", { event: "*", schema: "public", table: "list_items" }, ping)
+    .subscribe();
+}
+
+export function unsubscribeChanges() {
+  if (channel) {
+    supabase.removeChannel(channel);
+    channel = null;
+  }
+}
+
 // --- offline read cache (per user) ---
 
 const cacheKey = (uid) => `save-food-cache:${uid}`;

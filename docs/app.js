@@ -20,6 +20,8 @@ import {
   scanReceipt,
   signInWithEmail,
   signOut,
+  subscribeToChanges,
+  unsubscribeChanges,
   updatePantryItem,
   verifyEmailCode,
 } from "./db.js";
@@ -59,6 +61,7 @@ async function setSession(user) {
   if (!user) {
     state.list = [];
     state.pantry = [];
+    unsubscribeChanges();
     showSignedOut();
     return;
   }
@@ -70,11 +73,19 @@ async function setSession(user) {
   showSignedIn();
   render();
   await refresh();
+  // Other devices on this account push changes too — refetch when they do.
+  subscribeToChanges(refresh);
 }
 
 async function refresh() {
   try {
     const data = await fetchAll();
+    // Skip the re-render when nothing changed, so background refreshes don't
+    // stomp an open date picker or mid-edit input.
+    const same =
+      JSON.stringify(data.list) === JSON.stringify(state.list) &&
+      JSON.stringify(data.pantry) === JSON.stringify(state.pantry);
+    if (same) return;
     state.list = data.list;
     state.pantry = data.pantry;
     persistCache();
@@ -84,6 +95,12 @@ async function refresh() {
     console.warn("refresh failed, using cache", err);
   }
 }
+
+// iOS suspends a backgrounded PWA (and its realtime socket); catch up the
+// moment the app comes back to the foreground.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && state.user) refresh();
+});
 
 function showSignedOut() {
   $("auth-view").classList.remove("hidden");
