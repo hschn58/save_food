@@ -30,7 +30,7 @@ const today = () => isoDate(new Date());
 // In-memory render cache. Supabase is the source of truth; this mirrors it and
 // is persisted to localStorage so the app paints instantly and works offline.
 const state = { user: null, list: [], pantry: [] };
-const ui = { tab: "list", search: "", expiringOnly: false, scanItems: null };
+const ui = { tab: "list", search: "", expiringOnly: false, scanItems: null, askHistory: [] };
 
 function persistCache() {
   if (state.user) cacheState(state.user.id, { list: state.list, pantry: state.pantry });
@@ -90,6 +90,7 @@ function showSignedOut() {
   $("auth-email").value = "";
   $("auth-code").value = "";
   pendingEmail = "";
+  ui.askHistory = [];
   $("title").textContent = "Save Food";
 }
 
@@ -363,9 +364,12 @@ $("ask-form").addEventListener("submit", async (e) => {
       daysLeft: daysLeft(i, today()),
     }));
     const list = state.list.map((i) => ({ name: i.name, quantity: i.quantity }));
-    const answer = await askPantry(q, pantry, list);
+    const answer = await askPantry(q, pantry, list, ui.askHistory);
+    // Remember recent turns so follow-up questions stay coherent.
+    ui.askHistory = [...ui.askHistory, { q, a: answer }].slice(-3);
     $("ask-answer").textContent = answer;
     $("ask-answer").classList.remove("hidden");
+    $("ask-q").value = "";
   } catch (err) {
     fail(err);
   } finally {

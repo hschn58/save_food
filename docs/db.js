@@ -157,7 +157,7 @@ function loadImage(file) {
 
 async function imageToPayload(file) {
   try {
-    const img = await Promise.race([loadImage(file), timeout(15000)]);
+    const img = await withTimeout(loadImage(file), 15000, "image decode timed out");
     const scale = Math.min(1, MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
     const w = Math.round(img.naturalWidth * scale);
     const h = Math.round(img.naturalHeight * scale);
@@ -175,13 +175,14 @@ async function imageToPayload(file) {
   }
 }
 
-function timeout(ms) {
-  return new Promise((_, reject) =>
-    setTimeout(
-      () => reject(new Error("Timed out reading the receipt. Try a stronger connection or a clearer photo.")),
-      ms,
-    )
-  );
+// Race a promise against a deadline, clearing the timer once either settles
+// so finished requests don't leave stray rejections behind.
+function withTimeout(promise, ms, message) {
+  let t;
+  const deadline = new Promise((_, reject) => {
+    t = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(t));
 }
 
 export async function scanReceipt(file) {
@@ -189,7 +190,7 @@ export async function scanReceipt(file) {
   // code is ours (supabase/functions/scan-receipt/index.ts). Race against a
   // timeout so a stalled upload or slow model surfaces an error instead of
   // hanging the UI forever.
-  return Promise.race([
+  return withTimeout(
     (async () => {
       const { data, error } = await supabase.functions.invoke("super-api", {
         body: await imageToPayload(file),
@@ -197,30 +198,33 @@ export async function scanReceipt(file) {
       if (error) throw error;
       return data.items ?? [];
     })(),
-    timeout(90000),
-  ]);
+    90000,
+    "Timed out reading the receipt. Try a stronger connection or a clearer photo.",
+  );
 }
 
-// Ask a free-form question about the pantry. `pantry` and `list` are
-// plain {name, quantity, daysLeft} snapshots built by the caller.
-export async function askPantry(question, pantry, list) {
-  return Promise.race([
+// Ask a free-form question about the pantry. `pantry` and `list` are plain
+// {name, quantity, daysLeft} snapshots; `history` is recent [{q, a}] turns so
+// follow-up questions stay coherent.
+export async function askPantry(question, pantry, list, history = []) {
+  return withTimeout(
     (async () => {
       const { data, error } = await supabase.functions.invoke("super-api", {
-        body: { question, pantry, list },
+        body: { question, pantry, list, history },
       });
       if (error) throw error;
       if (!data.answer) throw new Error("No answer came back. Try again.");
       return data.answer;
     })(),
-    timeout(60000),
-  ]);
+    60000,
+    "The answer timed out — try asking again.",
+  );
 }
 
 // Per-item shelf-life estimates for the confirmed names. Returns
 // [{ name, days }]; callers treat failure as "use the category default".
 export async function estimateExpiry(items) {
-  return Promise.race([
+  return withTimeout(
     (async () => {
       const { data, error } = await supabase.functions.invoke("super-api", {
         body: { items: items.map((i) => ({ name: i.name })) },
@@ -228,8 +232,9 @@ export async function estimateExpiry(items) {
       if (error) throw error;
       return data.estimates ?? [];
     })(),
-    timeout(45000),
-  ]);
+    45000,
+    "expiry estimate timed out",
+  );
 }
 
 // --- offline read cache (per user) ---

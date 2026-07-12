@@ -94,6 +94,7 @@ Deno.serve(async (req) => {
     question?: string;
     pantry?: { name?: string; quantity?: string; daysLeft?: number }[];
     list?: { name?: string; quantity?: string }[];
+    history?: { q?: string; a?: string }[];
   };
   try {
     body = await req.json();
@@ -115,6 +116,17 @@ Deno.serve(async (req) => {
     };
     const pantry = (Array.isArray(body.pantry) ? body.pantry : []).slice(0, 300).map(fmtItem);
     const list = (Array.isArray(body.list) ? body.list : []).slice(0, 200).map(fmtItem);
+    // Recent Q&A turns from the client so follow-ups ("how would I make
+    // that?") have context. Alternating user/assistant messages, then the new
+    // question; the pantry snapshot lives in the system prompt.
+    const messages: { role: string; content: string }[] = [];
+    for (const h of (Array.isArray(body.history) ? body.history : []).slice(-3)) {
+      if (h?.q && h?.a) {
+        messages.push({ role: "user", content: String(h.q).slice(0, 500) });
+        messages.push({ role: "assistant", content: String(h.a).slice(0, 2000) });
+      }
+    }
+    messages.push({ role: "user", content: q });
     const result = await anthropic({
       model: ANSWER_MODEL,
       max_tokens: 700,
@@ -123,14 +135,10 @@ Deno.serve(async (req) => {
         "only the user's pantry and grocery list below. Be concise and " +
         "practical. For recipe questions, say clearly what they have and " +
         "what's missing; assume basic staples like water and salt. Prefer " +
-        "using items that expire soonest. Plain text only, no markdown.",
-      messages: [{
-        role: "user",
-        content:
-          `My pantry:\n${pantry.join("\n") || "(empty)"}\n\n` +
-          `My grocery list (not bought yet):\n${list.join("\n") || "(empty)"}\n\n` +
-          `Question: ${q}`,
-      }],
+        "using items that expire soonest. Plain text only, no markdown.\n\n" +
+        `User's pantry:\n${pantry.join("\n") || "(empty)"}\n\n` +
+        `User's grocery list (not bought yet):\n${list.join("\n") || "(empty)"}`,
+      messages,
     });
     const answer = result?.content?.find((b: { type: string }) => b.type === "text")?.text;
     if (!answer) return json({ error: "answer failed" }, 502);
